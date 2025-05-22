@@ -1,81 +1,173 @@
 <?php
-namespace YourVendor\Ci4ModelGenerator\Commands;
+
+namespace Ci4ModelGenerator\Commands;
 
 use CodeIgniter\CLI\BaseCommand;
 use CodeIgniter\CLI\CLI;
-use YourVendor\Ci4ModelGenerator\Generator\ModelGenerator;
-use YourVendor\Ci4ModelGenerator\Generator\ControllerGenerator;
+use Config\Database;
+use Ci4ModelGenerator\ModelGenerator;
+use Ci4ModelGenerator\ControllerGenerator;
 
-class ModelGenerateCommand extends BaseCommand
+class GenerateModelCommand extends BaseCommand
 {
-    protected $group       = 'generate';
+    protected $group       = 'Generator';
     protected $name        = 'model:generate';
-    protected $description = 'Generate all models and controllers from database tables.';
-
-    protected $usage = 'model:generate --controllerFolder=Admin --modelPath=app/Models --controllerPath=app/Controllers';
+    protected $description = 'Generate CodeIgniter 4 Models from database tables. Use --all to generate all tables.';
 
     protected $options = [
-        '--controllerFolder' => 'Subfolder for controllers (e.g. Admin)',
-        '--modelPath'        => 'Output folder for models (default: app/Models)',
-        '--controllerPath'   => 'Output folder for controllers (default: app/Controllers)',
-        '--dbHost'           => 'Database host (default: localhost)',
-        '--dbUser'           => 'Database user (default: root)',
-        '--dbPass'           => 'Database password (default: empty)',
-        '--dbName'           => 'Database name (required)'
+        '--all' => 'Generate models for all tables in the database',
+        '--controller' => 'Generate controller for the model',
+        '--controllerFolder' => 'Specify controller folder/namespace (e.g. Admin, Api)',
     ];
 
-    public function run(array $params)
+    public function run(array $params = [])
     {
+        $db = Database::connect();
+
+        $generateAll = CLI::getOption('all');
+        $generateController = CLI::getOption('controller');
         $controllerFolder = CLI::getOption('controllerFolder') ?? '';
-        $modelPath = CLI::getOption('modelPath') ?? APPPATH . 'Models';
-        $controllerPath = CLI::getOption('controllerPath') ?? APPPATH . 'Controllers';
 
-        $dbHost = CLI::getOption('dbHost') ?? 'localhost';
-        $dbUser = CLI::getOption('dbUser') ?? 'root';
-        $dbPass = CLI::getOption('dbPass') ?? '';
-        $dbName = CLI::getOption('dbName');
+        if ($generateAll) {
+            $tables = $this->getAllTables($db);
 
-        if (!$dbName) {
-            CLI::error('Database name (--dbName) is required.');
-            return;
+            if (empty($tables)) {
+                CLI::error('No tables found in the database.');
+                return;
+            }
+
+            foreach ($tables as $table) {
+                $this->generateModelForTable($table);
+
+                if ($generateController) {
+                    $this->generateControllerForTable($table, $controllerFolder);
+                }
+            }
+
+            CLI::write('All models' . ($generateController ? ' and controllers' : '') . ' generated successfully.');
+        } else {
+            $table = $params[0] ?? CLI::prompt('Enter table name');
+
+            if (!$table) {
+                CLI::error('Table name is required.');
+                return;
+            }
+
+            $this->generateModelForTable($table);
+
+            if ($generateController) {
+                $this->generateControllerForTable($table, $controllerFolder);
+            }
         }
-
-        // Init generators
-        $modelGenerator = new ModelGenerator([
-            'hostname' => $dbHost,
-            'username' => $dbUser,
-            'password' => $dbPass,
-            'database' => $dbName,
-        ], $modelPath);
-
-        $controllerGenerator = new ControllerGenerator($controllerPath);
-
-        CLI::write("Generating models to $modelPath ...");
-        $modelFiles = $modelGenerator->generateAllModels();
-
-        CLI::write("Generating controllers to $controllerPath" . ($controllerFolder ? "/$controllerFolder" : "") . " ...");
-
-        foreach ($modelFiles as $modelFile) {
-            // Extract table name from model filename
-            $fileName = basename($modelFile, '.php');
-            $tableName = $this->toSnakeCase(str_replace('Model', '', $fileName));
-            $controllerName = str_replace('Model', '', $fileName);
-
-            $fileController = $controllerGenerator->generateController($tableName, $controllerName, $controllerFolder);
-
-            CLI::write("Generated controller: $fileController");
-
-            // Print route snippet
-            $routeSnippet = $controllerGenerator->generateRouteSnippet($controllerName, $controllerFolder);
-            CLI::write("Route snippet for $controllerName:");
-            CLI::write($routeSnippet);
-        }
-
-        CLI::write("Done!");
     }
 
-    protected function toSnakeCase(string $input): string
+    protected function getAllTables($db): array
     {
-        return strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', $input));
+        $tables = [];
+
+        $query = $db->query('SHOW TABLES');
+
+        foreach ($query->getResultArray() as $row) {
+            $tables[] = array_values($row)[0];
+        }
+
+        return $tables;
+    }
+
+    protected function generateModelForTable(string $table)
+    {
+        $generator = new ModelGenerator($table);
+        $modelCode = $generator->generate();
+
+        $modelFile = WRITEPATH . '../app/Models/' . ucfirst($table) . 'Model.php';
+
+        if (file_exists($modelFile)) {
+            CLI::write("Model file already exists: $modelFile");
+            $overwrite = CLI::prompt('Overwrite? (y/n)', ['y', 'n']);
+            if (strtolower($overwrite) !== 'y') {
+                CLI::write("Skipped generating model for table '$table'.");
+                return;
+            }
+        }
+
+        file_put_contents($modelFile, $modelCode);
+        CLI::write("Model for table '$table' generated successfully at: $modelFile");
+    }
+
+    protected function generateControllerForTable(string $table, string $controllerFolder)
+    {
+        $modelName = ucfirst($table) . 'Model';
+        $controllerName = ucfirst($table);
+
+        $generator = new ControllerGenerator($controllerName, $modelName, 'App\Controllers', $controllerFolder);
+        $controllerCode = $generator->generate();
+
+        $folderPath = WRITEPATH . '../app/Controllers/';
+        if ($controllerFolder !== '') {
+            $folderPath .= $controllerFolder . '/';
+            if (!is_dir($folderPath)) {
+                mkdir($folderPath, 0755, true);
+            }
+        }
+
+        $controllerFile = $folderPath . $controllerName . '.php';
+
+        if (file_exists($controllerFile)) {
+            CLI::write("Controller file already exists: $controllerFile");
+            $overwrite = CLI::prompt('Overwrite? (y/n)', ['y', 'n']);
+            if (strtolower($overwrite) !== 'y') {
+                CLI::write("Skipped generating controller for table '$table'.");
+                return;
+            }
+        }
+
+        file_put_contents($controllerFile, $controllerCode);
+        CLI::write("Controller for table '$table' generated successfully at: $controllerFile");
+
+        // Tambahkan routes otomatis ke app/Config/Routes.php
+        $success = $this->appendRouteToRoutesFile($controllerName, $controllerFolder);
+        if ($success) {
+            CLI::write("Route group for '$controllerName' successfully added to app/Config/Routes.php");
+        } else {
+            CLI::write("Route group for '$controllerName' already exists in app/Config/Routes.php, skipped.");
+        }
+    }
+
+    protected function appendRouteToRoutesFile(string $controllerName, string $controllerFolder): bool
+    {
+        $routesFile = WRITEPATH . '../app/Config/Routes.php';
+
+        if (!file_exists($routesFile)) {
+            CLI::error("Routes file not found: $routesFile");
+            return false;
+        }
+
+        $groupName = strtolower($controllerName);
+        $prefix = $controllerFolder !== '' ? $controllerFolder . '\\' : '';
+        $prefix = str_replace('/', '\\', $prefix);
+
+        $routeGroupCode = <<<ROUTES
+
+// Routes for {$controllerName}
+\$routes->group('$groupName', function (\$routes) {
+    \$routes->get('/', '{$prefix}{$controllerName}::index');
+    \$routes->get('read', '{$prefix}{$controllerName}::store');
+    \$routes->post('add', '{$prefix}{$controllerName}::add');
+    \$routes->put('edit', '{$prefix}{$controllerName}::edit');
+    \$routes->delete('delete/(:hash)', '{$prefix}{$controllerName}::delete/$1');
+});
+
+ROUTES;
+
+        $routesContent = file_get_contents($routesFile);
+
+        // Simple cek apakah sudah ada route group ini
+        if (strpos($routesContent, "\$routes->group('$groupName'") !== false) {
+            return false; // Sudah ada, jangan tambahkan
+        }
+
+        // Tambahkan di akhir file routes.php
+        file_put_contents($routesFile, $routesContent . $routeGroupCode);
+        return true;
     }
 }
