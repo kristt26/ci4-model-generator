@@ -1,0 +1,28 @@
+{
+  "name": "ajn/ci4-model-generator",
+  "description": "CodeIgniter 4 library to generate models from DB tables via CLI",
+  "type": "library",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Nama Kamu",
+      "email": "emailkamu@example.com"
+    }
+  ],
+  "require": {
+    "php": ">=7.4",
+    "codeigniter4/framework": "^4.1"
+  },
+  "autoload": {
+    "psr-4": {
+      "Ci4ModelGenerator\\": "src/"
+    }
+  },
+  "extra": {
+    "codeigniter4": {
+      "commands": [
+        "Ci4ModelGenerator\\Commands\\GenerateModelCommand"
+      ]
+    }
+  }
+}
