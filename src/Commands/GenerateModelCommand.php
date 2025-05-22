@@ -99,18 +99,25 @@ class GenerateModelCommand extends BaseCommand
         $modelName = ucfirst($table) . 'Model';
         $controllerName = ucfirst($table);
 
-        $generator = new ControllerGenerator($controllerName, $modelName, 'App\Controllers', $controllerFolder);
-        $controllerCode = $generator->generate();
-
+        // Set namespace controller berdasarkan folder
+        $namespace = 'App\Controllers';
         $folderPath = WRITEPATH . '../app/Controllers/';
+
         if ($controllerFolder !== '') {
-            $folderPath .= $controllerFolder . '/';
+            // Normalize folder path dan namespace
+            $controllerFolder = trim($controllerFolder, '\\/'); // hapus slash di depan/akhir
+            $namespace .= '\\' . str_replace('/', '\\', $controllerFolder);
+            $folderPath .= str_replace('\\', DIRECTORY_SEPARATOR, $controllerFolder) . DIRECTORY_SEPARATOR;
+
             if (!is_dir($folderPath)) {
                 mkdir($folderPath, 0755, true);
             }
         }
 
         $controllerFile = $folderPath . $controllerName . '.php';
+
+        $generator = new ControllerGenerator($controllerName, $modelName, $namespace, $controllerFolder);
+        $controllerCode = $generator->generate();
 
         if (file_exists($controllerFile)) {
             CLI::write("Controller file already exists: $controllerFile");
@@ -132,6 +139,7 @@ class GenerateModelCommand extends BaseCommand
             CLI::write("Route group for '$controllerName' already exists in app/Config/Routes.php, skipped.");
         }
     }
+
 
     protected function appendRouteToRoutesFile(string $controllerName, string $controllerFolder): bool
     {
