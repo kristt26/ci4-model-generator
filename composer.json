@@ -5,12 +5,12 @@
   "license": "MIT",
   "authors": [
     {
-      "name": "Nama Kamu",
-      "email": "emailkamu@example.com"
+      "name": "Ajenkris Y. Kungkung",
+      "email": "kristt26@gmail.com"
     }
   ],
   "require": {
-    "php": ">=7.4",
+    "php": ">=8.0",
     "codeigniter4/framework": "^4.1"
   },
   "autoload": {

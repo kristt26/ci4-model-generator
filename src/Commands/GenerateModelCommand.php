@@ -1,9 +1,12 @@
-<?php namespace Ci4ModelGenerator\Commands;
+<?php
+
+namespace Ci4ModelGenerator\Commands;
 
 use CodeIgniter\CLI\BaseCommand;
 use CodeIgniter\CLI\CLI;
-use Ci4ModelGenerator\ModelGenerator;
 use Config\Database;
+use Ci4ModelGenerator\ModelGenerator;
+use Ci4ModelGenerator\ControllerGenerator;
 
 class GenerateModelCommand extends BaseCommand
 {
@@ -12,7 +15,9 @@ class GenerateModelCommand extends BaseCommand
     protected $description = 'Generate CodeIgniter 4 Models from database tables. Use --all to generate all tables.';
 
     protected $options = [
-        '--all' => 'Generate models for all tables in the database'
+        '--all' => 'Generate models for all tables in the database',
+        '--controller' => 'Generate controller for the model',
+        '--controllerFolder' => 'Specify controller folder/namespace (e.g. Admin, Api)',
     ];
 
     public function run(array $params = [])
@@ -20,9 +25,10 @@ class GenerateModelCommand extends BaseCommand
         $db = Database::connect();
 
         $generateAll = CLI::getOption('all');
+        $generateController = CLI::getOption('controller');
+        $controllerFolder = CLI::getOption('controllerFolder') ?? '';
 
         if ($generateAll) {
-            // Ambil semua tabel dari database
             $tables = $this->getAllTables($db);
 
             if (empty($tables)) {
@@ -32,11 +38,14 @@ class GenerateModelCommand extends BaseCommand
 
             foreach ($tables as $table) {
                 $this->generateModelForTable($table);
+
+                if ($generateController) {
+                    $this->generateControllerForTable($table, $controllerFolder);
+                }
             }
 
-            CLI::write('All models generated successfully.');
+            CLI::write('All models' . ($generateController ? ' and controllers' : '') . ' generated successfully.');
         } else {
-            // Generate satu tabel saja (input manual)
             $table = $params[0] ?? CLI::prompt('Enter table name');
 
             if (!$table) {
@@ -45,6 +54,10 @@ class GenerateModelCommand extends BaseCommand
             }
 
             $this->generateModelForTable($table);
+
+            if ($generateController) {
+                $this->generateControllerForTable($table, $controllerFolder);
+            }
         }
     }
 
@@ -52,7 +65,6 @@ class GenerateModelCommand extends BaseCommand
     {
         $tables = [];
 
-        // Query untuk MySQL, bisa sesuaikan jika pakai db lain
         $query = $db->query('SHOW TABLES');
 
         foreach ($query->getResultArray() as $row) {
@@ -80,5 +92,82 @@ class GenerateModelCommand extends BaseCommand
 
         file_put_contents($modelFile, $modelCode);
         CLI::write("Model for table '$table' generated successfully at: $modelFile");
+    }
+
+    protected function generateControllerForTable(string $table, string $controllerFolder)
+    {
+        $modelName = ucfirst($table) . 'Model';
+        $controllerName = ucfirst($table);
+
+        $generator = new ControllerGenerator($controllerName, $modelName, 'App\Controllers', $controllerFolder);
+        $controllerCode = $generator->generate();
+
+        $folderPath = WRITEPATH . '../app/Controllers/';
+        if ($controllerFolder !== '') {
+            $folderPath .= $controllerFolder . '/';
+            if (!is_dir($folderPath)) {
+                mkdir($folderPath, 0755, true);
+            }
+        }
+
+        $controllerFile = $folderPath . $controllerName . '.php';
+
+        if (file_exists($controllerFile)) {
+            CLI::write("Controller file already exists: $controllerFile");
+            $overwrite = CLI::prompt('Overwrite? (y/n)', ['y', 'n']);
+            if (strtolower($overwrite) !== 'y') {
+                CLI::write("Skipped generating controller for table '$table'.");
+                return;
+            }
+        }
+
+        file_put_contents($controllerFile, $controllerCode);
+        CLI::write("Controller for table '$table' generated successfully at: $controllerFile");
+
+        // Tambahkan routes otomatis ke app/Config/Routes.php
+        $success = $this->appendRouteToRoutesFile($controllerName, $controllerFolder);
+        if ($success) {
+            CLI::write("Route group for '$controllerName' successfully added to app/Config/Routes.php");
+        } else {
+            CLI::write("Route group for '$controllerName' already exists in app/Config/Routes.php, skipped.");
+        }
+    }
+
+    protected function appendRouteToRoutesFile(string $controllerName, string $controllerFolder): bool
+    {
+        $routesFile = WRITEPATH . '../app/Config/Routes.php';
+
+        if (!file_exists($routesFile)) {
+            CLI::error("Routes file not found: $routesFile");
+            return false;
+        }
+
+        $groupName = strtolower($controllerName);
+        $prefix = $controllerFolder !== '' ? $controllerFolder . '\\' : '';
+        $prefix = str_replace('/', '\\', $prefix);
+
+        $routeGroupCode = <<<ROUTES
+
+// Routes for {$controllerName}
+\$routes->group('$groupName', function (\$routes) {
+    \$routes->get('/', '{$prefix}{$controllerName}::index');
+    \$routes->get('read', '{$prefix}{$controllerName}::store');
+    \$routes->post('add', '{$prefix}{$controllerName}::add');
+    \$routes->put('edit', '{$prefix}{$controllerName}::edit');
+    \$routes->delete('delete/(:hash)', '{$prefix}{$controllerName}::delete/$1');
+});
+
+ROUTES;
+
+        $routesContent = file_get_contents($routesFile);
+
+        // Simple cek apakah sudah ada route group ini
+        if (strpos($routesContent, "\$routes->group('$groupName'") !== false) {
+            return false; // Sudah ada, jangan tambahkan
+        }
+
+        // Tambahkan di akhir file routes.php
+        file_put_contents($routesFile, $routesContent . $routeGroupCode);
+        return true;
     }
 }
