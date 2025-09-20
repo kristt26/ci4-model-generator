@@ -1,46 +1,47 @@
-Oke, biar rapi saya susun ulang README.md-nya. Versi ini sudah saya format pakai Markdown standar GitHub, jadi harusnya tampil **rapi** dan enak dibaca. Silakan langsung copy:
+Siap 👍 saya bikinkan **`README.md`** yang cocok untuk library CodeIgniter 4 kamu (generator model & controller).
+
+Berikut draft `README.md`:
 
 ````markdown
-# CodeIgniter 4 – Model & Controller Generator
+# CI4 Model & Controller Generator
 
-Generator otomatis untuk membuat file **Model** (dan opsional **Controller**) dari skema database.  
-Dengan ini, Anda tidak perlu lagi menulis `class ... extends Model` secara berulang.
+[![CodeIgniter 4](https://img.shields.io/badge/CodeIgniter-4-red)](https://codeigniter.com/)
+[![PHP](https://img.shields.io/badge/PHP-^8.1-blue)](https://www.php.net/)
 
----
-
-## 🚀 Instalasi
-
-1. Pastikan **CodeIgniter 4** sudah berjalan.  
-2. Letakkan folder `Ci4ModelGenerator` ke dalam `app/Commands` (atau namespace lain sesuai kebutuhan).  
-3. Selesai – CodeIgniter otomatis akan mendeteksi command baru.  
+Library ini menyediakan **Command Line Interface (CLI)** untuk meng-generate **Model** dan **Controller** otomatis dari tabel database pada CodeIgniter 4.  
+Mendukung opsi generate semua tabel, generate controller sekaligus, serta mode **refresh** (overwrite file tanpa konfirmasi).
 
 ---
 
-## ⚡ Sintaks Dasar
+## ✨ Fitur
+- Generate model dari satu tabel atau semua tabel.
+- Generate controller otomatis dari model yang dibuat.
+- Mendukung namespace/folder controller (misal: `Admin`, `Api`).
+- Tambahkan route otomatis ke `app/Config/Routes.php`.
+- Opsi `--refresh` untuk overwrite tanpa prompt konfirmasi.
+
+---
+
+## 📦 Instalasi
+Clone atau install library ini ke dalam project CodeIgniter 4 kamu:
 
 ```bash
-php spark model:generate [nama_tabel] [options]
+composer require ajenkris/ci4-model-generator
 ````
 
-### Options
-
-| Option                  | Fungsi                                                      |
-| ----------------------- | ----------------------------------------------------------- |
-| `--all`                 | Generate model untuk **semua tabel** dalam database.        |
-| `--controller`          | Sekaligus generate **controller**.                          |
-| `--controllerFolder=Ns` | Controller ditaruh di sub-folder (misalnya `Admin`, `Api`). |
+> Pastikan sudah menggunakan **CodeIgniter 4** dan **PHP >= 8.1**.
 
 ---
 
-## 📌 Contoh Penggunaan
+## 🚀 Penggunaan
 
-### 1. Generate Model untuk 1 tabel
+### Generate Model untuk satu tabel
 
 ```bash
 php spark model:generate users
 ```
 
-**Output:**
+Akan menghasilkan file:
 
 ```
 app/Models/UsersModel.php
@@ -48,32 +49,30 @@ app/Models/UsersModel.php
 
 ---
 
-### 2. Generate Model + Controller
+### Generate Model + Controller
 
 ```bash
 php spark model:generate users --controller
 ```
 
-**Output:**
+Akan menghasilkan file:
 
 ```
 app/Models/UsersModel.php
 app/Controllers/Users.php
 ```
 
-Route otomatis ditambahkan ke `app/Config/Routes.php`.
+Sekaligus menambahkan route group di `app/Config/Routes.php`.
 
 ---
 
-### 3. Generate untuk Semua Tabel
+### Generate Semua Tabel
 
 ```bash
 php spark model:generate --all
 ```
 
----
-
-### 4. Semua Tabel + Controller
+Dengan controller:
 
 ```bash
 php spark model:generate --all --controller
@@ -81,127 +80,81 @@ php spark model:generate --all --controller
 
 ---
 
-### 5. Controller di Folder Admin
+### Generate dengan Folder/Namespace Controller
 
 ```bash
 php spark model:generate users --controller --controllerFolder=Admin
 ```
 
-**Route yang ditambahkan:**
+Akan menghasilkan:
 
-```php
-$routes->group('users', static function ($r) {
-    $r->get('/', 'Admin\Users::index');
-    $r->get('read', 'Admin\Users::store');
-    $r->post('add', 'Admin\Users::add');
-    $r->put('edit', 'Admin\Users::edit');
-    $r->delete('delete/(:hash)', 'Admin\Users::delete/$1');
-});
 ```
+app/Controllers/Admin/Users.php
+```
+
+Dengan namespace `App\Controllers\Admin`.
 
 ---
 
-## 📝 Hasil Generate
-
-### Model
-
-```php
-<?php
-namespace App\Models;
-use CodeIgniter\Model;
-
-class UsersModel extends Model
-{
-    protected $table         = 'users';
-    protected $primaryKey    = 'id';
-    protected $allowedFields = ['username', 'password', 'akses'];
-}
-```
-
-### Controller (CRUD sederhana)
-
-```php
-<?php
-namespace App\Controllers;
-use App\Controllers\BaseController;
-use App\Models\UsersModel;
-
-class Users extends BaseController
-{
-    public function index()
-    {
-        $data['users'] = (new UsersModel)->findAll();
-        return view('users/index', $data);
-    }
-
-    public function store()
-    {
-        return $this->response->setJSON((new UsersModel)->findAll());
-    }
-
-    public function add()
-    {
-        (new UsersModel)->insert($this->request->getPost());
-        return redirect()->to('/users');
-    }
-
-    public function edit($id)
-    {
-        (new UsersModel)->update($id, $this->request->getPost());
-        return redirect()->to('/users');
-    }
-
-    public function delete($id)
-    {
-        (new UsersModel)->delete($id);
-        return redirect()->to('/users');
-    }
-}
-```
-
----
-
-## 📂 Struktur Project (Contoh)
-
-### Sebelum generate
-
-```
-app/
-├─ Config/
-├─ Controllers/
-├─ Models/
-└─ ...
-```
-
-### Setelah generate
-
-Command:
+### Mode Refresh (overwrite tanpa prompt)
 
 ```bash
-php spark model:generate users --controller --controllerFolder=Api
+php spark model:generate users --refresh
 ```
 
-Struktur:
+atau
+
+```bash
+php spark model:generate --all --controller --refresh
+```
+
+atau 
+
+```bash
+php spark model:generate --all --controller --controllerFolder=Admin --refresh
+```
+---
+
+## ⚙️ Options
+
+| Opsi                 | Deskripsi                                                    |
+| -------------------- | ------------------------------------------------------------ |
+| `--all`              | Generate semua tabel dalam database                          |
+| `--controller`       | Generate controller untuk model yang dibuat                  |
+| `--controllerFolder` | Tentukan folder/namespace controller (misal: `Admin`, `Api`) |
+| `--refresh`          | Overwrite file lama tanpa prompt konfirmasi                  |
+
+---
+
+## 📂 Struktur Output
 
 ```
 app/
-├─ Config/
-│  └─ Routes.php        ← tambahan group route users
-├─ Controllers/
-│  └─ Api/
-│     └─ Users.php
-├─ Models/
-│  └─ UsersModel.php
-└─ ...
+├── Controllers/
+│   ├── Users.php
+│   └── Admin/
+│       └── Products.php
+└── Models/
+    ├── UsersModel.php
+    └── ProductsModel.php
 ```
 
 ---
 
-## ✅ Kesimpulan
+## 🛠️ Catatan
 
-Dengan command ini, Anda bisa lebih cepat membangun **Model** dan **Controller CRUD dasar** di CodeIgniter 4 tanpa menulis boilerplate code berulang kali.
+* Pastikan database sudah terkoneksi dengan benar di `.env` atau `app/Config/Database.php`.
+* File model/controller yang sudah ada **tidak akan di-overwrite** kecuali menggunakan opsi `--refresh`.
+
+---
+
+## 📜 Lisensi
+
+MIT License © 2025 [Ajenkris Yanto Kungkung](https://github.com/ajenkris)
 
 ```
 
-Mau saya buatkan juga **preview tampilan di GitHub** (screenshot hasil render README) biar Anda yakin tampilannya rapi?
+---
+
+Mau saya tambahkan juga contoh **controller hasil generate otomatis** (isi kode skeleton) di `README.md` biar user tahu outputnya?
 ```

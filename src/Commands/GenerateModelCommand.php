@@ -15,18 +15,22 @@ class GenerateModelCommand extends BaseCommand
     protected $description = 'Generate CodeIgniter 4 Models from database tables. Use --all to generate all tables.';
 
     protected $options = [
-        '--all' => 'Generate models for all tables in the database',
-        '--controller' => 'Generate controller for the model',
+        '--all'              => 'Generate models for all tables in the database',
+        '--controller'       => 'Generate controller for the model',
         '--controllerFolder' => 'Specify controller folder/namespace (e.g. Admin, Api)',
+        '--refresh'          => 'Force overwrite existing files without prompt',
     ];
+
+    protected $refresh = false;
 
     public function run(array $params = [])
     {
         $db = Database::connect();
 
-        $generateAll = CLI::getOption('all');
+        $generateAll       = CLI::getOption('all');
         $generateController = CLI::getOption('controller');
-        $controllerFolder = CLI::getOption('controllerFolder') ?? '';
+        $controllerFolder  = CLI::getOption('controllerFolder') ?? '';
+        $this->refresh     = CLI::getOption('refresh') ?? false;
 
         if ($generateAll) {
             $tables = $this->getAllTables($db);
@@ -81,7 +85,7 @@ class GenerateModelCommand extends BaseCommand
 
         $modelFile = WRITEPATH . '../app/Models/' . ucfirst($table) . 'Model.php';
 
-        if (file_exists($modelFile)) {
+        if (file_exists($modelFile) && !$this->refresh) {
             CLI::write("Model file already exists: $modelFile");
             $overwrite = CLI::prompt('Overwrite? (y/n)', ['y', 'n']);
             if (strtolower($overwrite) !== 'y') {
@@ -96,11 +100,11 @@ class GenerateModelCommand extends BaseCommand
 
     protected function generateControllerForTable(string $table, string $controllerFolder)
     {
-        $modelName = ucfirst($table) . 'Model';
+        $modelName      = ucfirst($table) . 'Model';
         $controllerName = ucfirst($table);
 
-        $generator = new ControllerGenerator($controllerName, $modelName, 'App\Controllers', $controllerFolder);
-        $controllerCode = $generator->generate();
+        $generator       = new ControllerGenerator($controllerName, $modelName, 'App\Controllers', $controllerFolder);
+        $controllerCode  = $generator->generate();
 
         $folderPath = WRITEPATH . '../app/Controllers/';
         if ($controllerFolder !== '') {
@@ -112,7 +116,7 @@ class GenerateModelCommand extends BaseCommand
 
         $controllerFile = $folderPath . $controllerName . '.php';
 
-        if (file_exists($controllerFile)) {
+        if (file_exists($controllerFile) && !$this->refresh) {
             CLI::write("Controller file already exists: $controllerFile");
             $overwrite = CLI::prompt('Overwrite? (y/n)', ['y', 'n']);
             if (strtolower($overwrite) !== 'y') {
@@ -143,8 +147,8 @@ class GenerateModelCommand extends BaseCommand
         }
 
         $groupName = strtolower($controllerName);
-        $prefix = $controllerFolder !== '' ? $controllerFolder . '\\' : '';
-        $prefix = str_replace('/', '\\', $prefix);
+        $prefix    = $controllerFolder !== '' ? $controllerFolder . '\\' : '';
+        $prefix    = str_replace('/', '\\', $prefix);
 
         $routeGroupCode = <<<ROUTES
 
@@ -154,7 +158,7 @@ class GenerateModelCommand extends BaseCommand
     \$routes->get('read', '{$prefix}{$controllerName}::store');
     \$routes->post('add', '{$prefix}{$controllerName}::add');
     \$routes->put('edit', '{$prefix}{$controllerName}::edit');
-    \$routes->delete('delete/(:hash)', '{$prefix}{$controllerName}::delete/$1');
+    \$routes->delete('delete/(:hash)', '{$prefix}{$controllerName}::delete/\$1');
 });
 
 ROUTES;
